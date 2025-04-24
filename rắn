@@ -1,0 +1,174 @@
+#include <Arduino.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// Cấu hình màn hình OLED
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Cấu hình nút nhấn
+#define BUTTON_UP 12
+#define BUTTON_DOWN 13
+#define BUTTON_LEFT 14
+#define BUTTON_RIGHT 27
+
+// Kích thước ô vuông
+#define CELL_SIZE 4
+
+// Tọa độ rắn
+int snakeX[100], snakeY[100];
+int snakeLength = 3;
+
+// Tọa độ thức ăn
+int foodX, foodY;
+
+// Hướng di chuyển (0: lên, 1: phải, 2: xuống, 3: trái)
+int direction = 1;
+
+// Khai báo các hàm
+void spawnFood();
+void moveSnake();
+bool checkCollision();
+void drawGame();
+void gameOver();
+
+// Hàm khởi tạo
+void setup() {
+  // Khởi tạo màn hình OLED
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;);
+  }
+
+  // Khởi tạo nút nhấn
+  pinMode(BUTTON_UP, INPUT_PULLUP);
+  pinMode(BUTTON_DOWN, INPUT_PULLUP);
+  pinMode(BUTTON_LEFT, INPUT_PULLUP);
+  pinMode(BUTTON_RIGHT, INPUT_PULLUP);
+
+  // vẽ nền 
+  // Khởi tạo rắn
+  for (int i = 0; i < snakeLength; i++) {
+    snakeX[i] = 20 - i * CELL_SIZE;
+    snakeY[i] = 20;
+  }
+
+  // Tạo thức ăn
+  spawnFood();
+
+  display.clearDisplay();
+}
+
+// Hàm vòng lặp chính
+void loop() {
+  // Đọc nút nhấn
+  if (digitalRead(BUTTON_UP) == LOW && direction != 2) direction = 0;
+  if (digitalRead(BUTTON_DOWN) == LOW && direction != 0) direction = 2;
+  if (digitalRead(BUTTON_LEFT) == LOW && direction != 1) direction = 3;
+  if (digitalRead(BUTTON_RIGHT) == LOW && direction != 3) direction = 1;
+
+  // Di chuyển rắn
+  moveSnake();
+
+  // Kiểm tra va chạm
+  if (checkCollision()) {
+    gameOver();
+    return;
+  }
+
+  // Vẽ game
+  drawGame();
+
+  delay(200); // Tốc độ game
+}
+
+// Hàm di chuyển rắn
+void moveSnake() {
+  // Di chuyển thân rắn
+  for (int i = snakeLength - 1; i > 0; i--) {
+    snakeX[i] = snakeX[i - 1];
+    snakeY[i] = snakeY[i - 1];
+  }
+
+  // Di chuyển đầu rắn
+  if (direction == 0) snakeY[0] -= CELL_SIZE; // Lên
+  if (direction == 1) snakeX[0] += CELL_SIZE; // Phải
+  if (direction == 2) snakeY[0] += CELL_SIZE; // Xuống
+  if (direction == 3) snakeX[0] -= CELL_SIZE; // Trái
+
+  // Kiểm tra ăn thức ăn
+  if (snakeX[0] == foodX && snakeY[0] == foodY) {
+    snakeLength++;
+    spawnFood();
+  }
+}
+
+// Hàm tạo thức ăn
+void spawnFood() {
+  bool validPosition = false;
+
+  while (!validPosition) {
+    // Tạo tọa độ ngẫu nhiên cho thức ăn
+    foodX = random(0, SCREEN_WIDTH / CELL_SIZE) * CELL_SIZE;
+    foodY = random(0, SCREEN_HEIGHT / CELL_SIZE) * CELL_SIZE;
+
+    // Kiểm tra xem thức ăn có trùng với rắn không
+    validPosition = true;
+    for (int i = 0; i < snakeLength; i++) {
+      if (foodX == snakeX[i] && foodY == snakeY[i]) {
+        validPosition = false; // Nếu trùng, tạo lại vị trí
+        break;
+      }
+    }
+  }
+}
+
+// Hàm kiểm tra va chạm
+bool checkCollision() {
+  // Va chạm tường
+  if (snakeX[0] < 0 || snakeX[0] >= SCREEN_WIDTH || snakeY[0] < 0 || snakeY[0] >= SCREEN_HEIGHT) {
+    return true;
+  }
+
+  // Va chạm chính mình
+  for (int i = 1; i < snakeLength; i++) {
+    if (snakeX[0] == snakeX[i] && snakeY[0] == snakeY[i]) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// Hàm vẽ game
+void drawGame() {
+  display.clearDisplay();
+
+  // Vẽ rắn
+  for (int i = 0; i < snakeLength; i++) {
+    display.fillRect(snakeX[i], snakeY[i], CELL_SIZE, CELL_SIZE, SSD1306_WHITE);
+  }
+
+  // Vẽ thức ăn
+  display.fillRect(foodX, foodY, CELL_SIZE, CELL_SIZE, SSD1306_WHITE);
+
+  display.display();
+}
+
+// Hàm xử lý khi game kết thúc
+void gameOver() {
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(10, SCREEN_HEIGHT / 2 - 10);
+  display.println("Kimochi");
+  display.display();
+  delay(3000);
+
+  // Khởi động lại game
+  snakeLength = 3;
+  direction = 1;
+  setup();
+}
